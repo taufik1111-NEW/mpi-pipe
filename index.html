@@ -1,0 +1,1440 @@
+<!DOCTYPE html>
+<html lang="id" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Laboratorium Digital Sistem Indra Manusia - IPA Kelas IX</title>
+    
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        labBg: '#090d16',
+                        labCard: '#111827',
+                        labCardHover: '#1f2937',
+                        labCyan: '#00f2fe',
+                        labBlue: '#3b82f6',
+                        labGreen: '#10b981',
+                        labAmber: '#f59e0b',
+                        labRed: '#ef4444',
+                        labPurple: '#8b5cf6'
+                    },
+                    boxShadow: {
+                        'neon-cyan': '0 0 20px rgba(0, 242, 254, 0.4)',
+                        'neon-green': '0 0 20px rgba(16, 185, 129, 0.4)',
+                        'neon-red': '0 0 20px rgba(239, 68, 68, 0.4)',
+                        'neon-purple': '0 0 20px rgba(139, 92, 246, 0.4)'
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Google Fonts: Inter & Outfit -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700;800&family=Outfit:wght@500;700;800;900&display=swap" rel="stylesheet">
+
+    <!-- MediaPipe Hands & Camera Utils CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands/hands.js" crossorigin="anonymous"></script>
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #090d16;
+            color: #f3f4f6;
+            user-select: none;
+            -webkit-user-select: none;
+            touch-action: manipulation;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, h4, .font-heading {
+            font-family: 'Outfit', sans-serif;
+        }
+
+        /* Virtual Pointer Cursor Overlay */
+        #virtual-cursor {
+            position: fixed;
+            width: 32px;
+            height: 32px;
+            pointer-events: none;
+            z-index: 99999;
+            transform: translate(-50%, -50%);
+            transition: transform 0.05s ease-out, border-color 0.15s, background-color 0.15s;
+        }
+
+        .cursor-ring {
+            width: 100%;
+            height: 100%;
+            border: 3px solid #00f2fe;
+            border-radius: 50%;
+            box-shadow: 0 0 15px rgba(0, 242, 254, 0.8);
+            animation: pulseRing 1.5s infinite alternate;
+        }
+
+        .cursor-dot {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 10px;
+            height: 10px;
+            background-color: #f59e0b;
+            border-radius: 50%;
+            transform: translate(-50%, -50%);
+        }
+
+        #virtual-cursor.pinched .cursor-ring {
+            border-color: #10b981;
+            background-color: rgba(16, 185, 129, 0.4);
+            transform: scale(0.7);
+            box-shadow: 0 0 25px rgba(16, 185, 129, 0.9);
+        }
+
+        @keyframes pulseRing {
+            0% { transform: scale(0.95); opacity: 0.8; }
+            100% { transform: scale(1.1); opacity: 1; }
+        }
+
+        /* Drag Cards & Drop Zones */
+        .drag-card {
+            touch-action: none;
+            cursor: grab;
+            transition: transform 0.15s cubic-bezier(0.2, 0, 0.1, 1), box-shadow 0.15s, border-color 0.15s;
+        }
+
+        .drag-card:active {
+            cursor: grabbing;
+        }
+
+        .drag-card.is-dragging {
+            position: fixed !important;
+            z-index: 9999 !important;
+            pointer-events: none !important; /* CRITICAL FIX: allow elementFromPoint to hit drop-slot below */
+            transform: translate(-50%, -50%) scale(1.08) rotate(-1deg) !important;
+            box-shadow: 0 20px 30px -5px rgba(0, 242, 254, 0.6);
+            border-color: #00f2fe !important;
+            background-color: #1e293b !important;
+        }
+
+        .drop-slot {
+            transition: all 0.2s ease-in-out;
+        }
+
+        .drop-slot.slot-hover {
+            background-color: rgba(0, 242, 254, 0.15) !important;
+            border-color: #00f2fe !important;
+            transform: scale(1.02);
+            box-shadow: 0 0 20px rgba(0, 242, 254, 0.4);
+        }
+
+        .drop-slot.correct-slot {
+            background-color: rgba(16, 185, 129, 0.18) !important;
+            border-color: #10b981 !important;
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.4);
+        }
+
+        /* Shake animation for wrong drop */
+        @keyframes shakeError {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-8px); }
+            40%, 80% { transform: translateX(8px); }
+        }
+
+        .shake-anim {
+            animation: shakeError 0.4s ease-in-out;
+            border-color: #ef4444 !important;
+            box-shadow: 0 0 20px rgba(239, 68, 68, 0.6) !important;
+        }
+
+        /* Floating Score Toast Animation */
+        @keyframes floatUp {
+            0% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+            100% { opacity: 0; transform: translate(-50%, -50px) scale(1.2); }
+        }
+
+        .floating-toast {
+            position: fixed;
+            pointer-events: none;
+            z-index: 10000;
+            font-family: 'Outfit', sans-serif;
+            font-weight: 900;
+            animation: floatUp 0.8s ease-out forwards;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #090d16; }
+        ::-webkit-scrollbar-thumb { background: #1f2937; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #374151; }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col justify-between overflow-x-hidden text-slate-100 antialiased">
+
+    <!-- VIRTUAL GESTURE POINTER OVERLAY -->
+    <div id="virtual-cursor" class="hidden">
+        <div class="cursor-dot"></div>
+        <div class="cursor-ring"></div>
+        <span id="cursor-label" class="absolute top-9 left-1/2 -translate-x-1/2 bg-slate-900/90 text-[10px] text-cyan-300 px-2 py-0.5 rounded border border-cyan-500/30 whitespace-nowrap font-mono shadow-md">
+            POINTER
+        </span>
+    </div>
+
+    <!-- FLOATING CAMERA DOCK -->
+    <div id="camera-dock" class="fixed bottom-4 right-4 z-50 w-48 bg-slate-900/95 border border-cyan-500/40 rounded-2xl p-2.5 shadow-2xl backdrop-blur-md hidden transition-all">
+        <div class="relative w-full h-32 bg-black rounded-xl overflow-hidden border border-slate-800">
+            <video id="webcam-input" class="w-full h-full object-cover scale-x-[-1]" playsinline muted></video>
+            <canvas id="gesture-canvas" class="absolute inset-0 w-full h-full scale-x-[-1]"></canvas>
+            <div id="gesture-status-overlay" class="absolute bottom-0 inset-x-0 bg-black/80 text-[10px] text-center py-1 text-cyan-300 font-mono tracking-wide">
+                Mencari Tangan...
+            </div>
+        </div>
+        <div class="flex items-center justify-between mt-2 px-1 text-[11px]">
+            <span class="text-slate-400 font-semibold flex items-center gap-1">
+                <span class="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span> MediaPipe
+            </span>
+            <button onclick="toggleCamera(false)" class="text-red-400 hover:text-red-300 font-bold px-1.5 py-0.5 rounded hover:bg-red-500/10 transition-colors">
+                Tutup
+            </button>
+        </div>
+    </div>
+
+    <!-- HEADER DASHBOARD -->
+    <header class="bg-slate-900/90 border-b border-slate-800 sticky top-0 z-40 backdrop-blur-md">
+        <div class="max-w-7xl mx-auto px-4 py-3 flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Brand Logo -->
+            <div class="flex items-center gap-3 cursor-pointer" onclick="switchSection('sec-menu')">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 via-blue-600 to-purple-600 flex items-center justify-center text-xl shadow-neon-cyan">
+                    🔬
+                </div>
+                <div>
+                    <h1 class="text-base sm:text-lg font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-blue-400 to-purple-400 leading-tight">
+                        LABORATORIUM SISTEM INDRA
+                    </h1>
+                    <p class="text-[11px] text-slate-400 font-medium">IPA SMP Kelas IX / Fase D • Drag & Drop Gesture Lab</p>
+                </div>
+            </div>
+
+            <!-- Dashboard Stats -->
+            <div class="flex items-center gap-4 sm:gap-6 bg-slate-950/80 px-4 py-1.5 rounded-2xl border border-slate-800 shadow-inner">
+                <div class="text-center">
+                    <span class="text-[10px] block font-bold text-slate-400 tracking-wider">SKOR REALTIME</span>
+                    <span id="score-display" class="text-lg font-extrabold text-amber-400 font-mono">0</span>
+                </div>
+                <div class="h-7 w-px bg-slate-800"></div>
+                <div class="text-center min-w-[100px]">
+                    <span class="text-[10px] block font-bold text-slate-400 tracking-wider">PROGRES LAB</span>
+                    <div class="w-24 bg-slate-800 h-2 rounded-full overflow-hidden my-0.5">
+                        <div id="progress-bar-fill" class="bg-gradient-to-r from-emerald-400 via-cyan-400 to-purple-500 h-full w-0 transition-all duration-300"></div>
+                    </div>
+                    <span id="progress-text" class="text-[10px] font-mono text-cyan-400">0%</span>
+                </div>
+            </div>
+
+            <!-- Action Controls -->
+            <div class="flex items-center gap-2">
+                <button id="cam-toggle-btn" onclick="initOrToggleCamera()" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-bold text-slate-200 border border-slate-700 flex items-center gap-2 transition-all hover:border-cyan-400">
+                    <span id="cam-dot" class="w-2 h-2 rounded-full bg-red-500"></span>
+                    <span id="cam-btn-text">📷 Gestur Kamera</span>
+                </button>
+                <button onclick="speakInstruction()" class="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-400 border border-slate-700 hover:border-cyan-400 transition-all" title="Bantuan Suara (Web Speech API)">
+                    🔊
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- TAB NAVIGATION BAR -->
+    <nav class="bg-slate-950 border-b border-slate-800 sticky top-[65px] z-30 shadow-md">
+        <div class="max-w-7xl mx-auto px-4 overflow-x-auto flex gap-1.5 py-2 scrollbar-none">
+            <button class="nav-tab-btn active px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap transition-all bg-cyan-500 text-slate-950 shadow-neon-cyan" data-target="sec-menu" onclick="switchSection('sec-menu')">🏠 Menu Utama</button>
+            <button class="nav-tab-btn px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/60" data-target="sec-kenali" onclick="switchSection('sec-kenali')">👁️️ Kenali Indra</button>
+            <button class="nav-tab-btn px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/60" data-target="sec-materi" onclick="switchSection('sec-materi')">📚 Jelajahi Materi</button>
+            <button class="nav-tab-btn px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/60" data-target="sec-lab" onclick="switchSection('sec-lab')">🧪 Lab Simulasi</button>
+            <button class="nav-tab-btn px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/60" data-target="sec-dnd1" onclick="switchSection('sec-dnd1')">🖐️ Drag & Drop 1: Organ & Fungsi</button>
+            <button class="nav-tab-btn px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/60" data-target="sec-dnd2" onclick="switchSection('sec-dnd2')">🎯 Drag & Drop 2: Jalur & Reseptor</button>
+            <button class="nav-tab-btn px-4 py-2 rounded-xl text-xs font-bold whitespace-nowrap text-slate-400 hover:text-slate-200 hover:bg-slate-800/60" data-target="sec-refleksi" onclick="switchSection('sec-refleksi')">💭 Refleksi & Badge</button>
+        </div>
+    </nav>
+
+    <!-- MAIN CONTENT CONTAINER -->
+    <main class="max-w-7xl mx-auto px-4 py-6 flex-grow w-full">
+
+        <!-- ================= SEC 0: MENU UTAMA ================= -->
+        <section id="sec-menu" class="view-section block space-y-6">
+            <div class="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 border border-cyan-500/30 p-6 sm:p-10 text-center sm:text-left shadow-2xl">
+                <div class="relative z-10 max-w-2xl space-y-4">
+                    <span class="inline-block px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-semibold">
+                        ⚡ Media Pembelajaran Sains Interaktif Kelas IX
+                    </span>
+                    <h2 class="text-2xl sm:text-4xl font-black text-white tracking-tight">
+                        Laboratorium Sistem Indra dengan <span class="text-transparent bg-clip-text bg-gradient-to-r from-cyan-400 via-emerald-400 to-purple-400">MediaPipe Drag & Drop Engine</span>
+                    </h2>
+                    <p class="text-slate-300 text-xs sm:text-sm leading-relaxed">
+                        Nikmati pengalaman belajar mandiri dan interaktif. Pasangkan organ indra, tipe reseptor, jalur transmisi impuls, dan analisis kasus harian menggunakan **Gestur Jepit Tangan Kamera (Pinch Gesture)** atau layar sentuh Papan Interaktif Digital!
+                    </p>
+                    <div class="flex flex-wrap gap-3 pt-2 justify-center sm:justify-start">
+                        <button onclick="switchSection('sec-dnd1')" class="px-6 py-3 rounded-2xl bg-gradient-to-r from-cyan-500 to-blue-600 text-slate-950 font-extrabold text-xs sm:text-sm shadow-neon-cyan hover:scale-105 transition-all">
+                            Mulai Drag & Drop Organ 🖐️
+                        </button>
+                        <button onclick="switchSection('sec-kenali')" class="px-6 py-3 rounded-2xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-bold text-xs sm:text-sm transition-all">
+                            Pelajari Anatomi 📚
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Grid Menu Cards -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div onclick="switchSection('sec-kenali')" class="bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-5 cursor-pointer transition-all hover:-translate-y-1 group">
+                    <div class="w-12 h-12 rounded-xl bg-cyan-500/10 text-cyan-400 border border-cyan-500/30 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition-transform">👁️</div>
+                    <h3 class="text-sm font-bold text-slate-100 mb-1">1. Kenali Panca Indra</h3>
+                    <p class="text-xs text-slate-400">Kartu anatomi interaktif organ mata, telinga, hidung, lidah, dan kulit beserta tipe reseptor khususnya.</p>
+                </div>
+
+                <div onclick="switchSection('sec-materi')" class="bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-5 cursor-pointer transition-all hover:-translate-y-1 group">
+                    <div class="w-12 h-12 rounded-xl bg-blue-500/10 text-blue-400 border border-blue-500/30 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition-transform">📚</div>
+                    <h3 class="text-sm font-bold text-slate-100 mb-1">2. Modul Ringkas IPA IX</h3>
+                    <p class="text-xs text-slate-400">11 Poin ringkasan materi penting mekanisme hantaran impuls dan kelainan indra.</p>
+                </div>
+
+                <div onclick="switchSection('sec-lab')" class="bg-slate-900/80 hover:bg-slate-800 border border-slate-800 hover:border-cyan-500/50 rounded-2xl p-5 cursor-pointer transition-all hover:-translate-y-1 group">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/10 text-emerald-400 border border-emerald-500/30 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition-transform">🧪</div>
+                    <h3 class="text-sm font-bold text-slate-100 mb-1">3. Lab Simulasi Impuls</h3>
+                    <p class="text-xs text-slate-400">Visualisasi interaktif rantai rangsangan fisik/kimia hingga diproses di pusat otak.</p>
+                </div>
+
+                <div onclick="switchSection('sec-dnd1')" class="bg-slate-900/80 hover:bg-slate-800 border border-cyan-500/40 hover:border-cyan-400 rounded-2xl p-5 cursor-pointer transition-all hover:-translate-y-1 group shadow-neon-cyan">
+                    <div class="w-12 h-12 rounded-xl bg-cyan-500 text-slate-950 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition-transform font-bold">🖐️</div>
+                    <h3 class="text-sm font-bold text-cyan-300 mb-1">4. Drag & Drop 1: Organ & Fungsi</h3>
+                    <p class="text-xs text-slate-300">Pasangkan 5 kartu organ indra manusia langsung ke deskripsi fungsi utamanya.</p>
+                </div>
+
+                <div onclick="switchSection('sec-dnd2')" class="bg-slate-900/80 hover:bg-slate-800 border border-emerald-500/40 hover:border-emerald-400 rounded-2xl p-5 cursor-pointer transition-all hover:-translate-y-1 group shadow-neon-green">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500 text-slate-950 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition-transform font-bold">🎯</div>
+                    <h3 class="text-sm font-bold text-emerald-300 mb-1">5. Drag & Drop 2: Jalur & Reseptor</h3>
+                    <p class="text-xs text-slate-300">3 Babak soal kuis tingkat lanjut: Tipe Reseptor, Mekanisme Impuls, dan Kasus Harian.</p>
+                </div>
+
+                <div onclick="switchSection('sec-refleksi')" class="bg-slate-900/80 hover:bg-slate-800 border border-purple-500/40 hover:border-purple-400 rounded-2xl p-5 cursor-pointer transition-all hover:-translate-y-1 group">
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/10 text-purple-400 border border-purple-500/30 flex items-center justify-center text-2xl mb-3 group-hover:scale-110 transition-transform">💭</div>
+                    <h3 class="text-sm font-bold text-slate-100 mb-1">6. Refleksi & Lencana</h3>
+                    <p class="text-xs text-slate-400">Kumpulkan 4 lencana prestasi dan isi lembar evaluasi diri siswa.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SEC 1: KENALI INDRA ================= -->
+        <section id="sec-kenali" class="view-section hidden space-y-6">
+            <div class="border-b border-slate-800 pb-3">
+                <h2 class="text-lg font-extrabold text-cyan-400 flex items-center gap-2">👁️ Aktivitas 1: Anatomi & Karakteristik 5 Indra</h2>
+                <p class="text-xs text-slate-400">Klik organ indra di bawah ini untuk mempelajari tipe reseptor, jenis stimulus, dan contohnya dalam kehidupan.</p>
+            </div>
+
+            <div class="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                <button onclick="showOrganDetail('mata')" class="p-4 rounded-2xl bg-slate-900 border-2 border-slate-800 hover:border-cyan-400 text-center space-y-1 transition-all">
+                    <span class="text-3xl block">👁️</span>
+                    <span class="text-xs font-bold block text-slate-200">MATA</span>
+                    <span class="text-[10px] text-cyan-400 block font-mono">Fotoreseptor</span>
+                </button>
+                <button onclick="showOrganDetail('telinga')" class="p-4 rounded-2xl bg-slate-900 border-2 border-slate-800 hover:border-cyan-400 text-center space-y-1 transition-all">
+                    <span class="text-3xl block">👂</span>
+                    <span class="text-xs font-bold block text-slate-200">TELINGA</span>
+                    <span class="text-[10px] text-cyan-400 block font-mono">Fonoreseptor</span>
+                </button>
+                <button onclick="showOrganDetail('hidung')" class="p-4 rounded-2xl bg-slate-900 border-2 border-slate-800 hover:border-cyan-400 text-center space-y-1 transition-all">
+                    <span class="text-3xl block">👃</span>
+                    <span class="text-xs font-bold block text-slate-200">HIDUNG</span>
+                    <span class="text-[10px] text-cyan-400 block font-mono">Kemoreseptor Gas</span>
+                </button>
+                <button onclick="showOrganDetail('lidah')" class="p-4 rounded-2xl bg-slate-900 border-2 border-slate-800 hover:border-cyan-400 text-center space-y-1 transition-all">
+                    <span class="text-3xl block">👅</span>
+                    <span class="text-xs font-bold block text-slate-200">LIDAH</span>
+                    <span class="text-[10px] text-cyan-400 block font-mono">Kemoreseptor Cair</span>
+                </button>
+                <button onclick="showOrganDetail('kulit')" class="p-4 rounded-2xl bg-slate-900 border-2 border-slate-800 hover:border-cyan-400 text-center space-y-1 transition-all col-span-2 sm:col-span-1">
+                    <span class="text-3xl block">✋</span>
+                    <span class="text-xs font-bold block text-slate-200">KULIT</span>
+                    <span class="text-[10px] text-cyan-400 block font-mono">Mekanoreseptor</span>
+                </button>
+            </div>
+
+            <div id="organ-detail-display" class="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 relative min-h-[200px] flex items-center justify-center shadow-xl">
+                <p class="text-slate-500 text-xs sm:text-sm text-center">Pilih salah satu tombol organ di atas untuk menampilkan informasi rinci.</p>
+            </div>
+        </section>
+
+        <!-- ================= SEC 2: JELAJAHI MATERI ================= -->
+        <section id="sec-materi" class="view-section hidden space-y-6">
+            <div class="border-b border-slate-800 pb-3 flex justify-between items-center flex-wrap gap-2">
+                <div>
+                    <h2 class="text-lg font-extrabold text-cyan-400 flex items-center gap-2">📚 Aktivitas 2: Rangkuman Modul IPA Kelas IX</h2>
+                    <p class="text-xs text-slate-400">11 Konsep penting anatomi organ, transmisi sinyal saraf, dan kesehatan indra.</p>
+                </div>
+                <button onclick="speakMateriAll()" class="px-3 py-1.5 rounded-xl bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-bold flex items-center gap-2 hover:bg-cyan-500/20 transition-all">
+                    🔊 Bacakan Ringkasan Materi
+                </button>
+            </div>
+
+            <div id="materi-grid-container" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <!-- ================= SEC 3: LAB SIMULASI ================= -->
+        <section id="sec-lab" class="view-section hidden space-y-6">
+            <div class="border-b border-slate-800 pb-3">
+                <h2 class="text-lg font-extrabold text-emerald-400 flex items-center gap-2">🧪 Aktivitas 3: Lab Transmisi Impuls Saraf</h2>
+                <p class="text-xs text-slate-400">Simulasikan bagaimana stimulus luar diubah oleh reseptor menjadi sinyal listrik saraf hingga diterima otak.</p>
+            </div>
+
+            <div class="flex flex-wrap gap-2">
+                <button onclick="loadLabSim('mata')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 border border-slate-700 text-slate-200 hover:border-emerald-400 transition-all">👁️ Simulasi Penglihatan (Mata)</button>
+                <button onclick="loadLabSim('telinga')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 border border-slate-700 text-slate-200 hover:border-emerald-400 transition-all">👂 Simulasi Pendengaran (Telinga)</button>
+                <button onclick="loadLabSim('hidung')" class="px-4 py-2 rounded-xl text-xs font-bold bg-slate-800 border border-slate-700 text-slate-200 hover:border-emerald-400 transition-all">👃 Simulasi Pembau (Hidung)</button>
+            </div>
+
+            <div class="bg-slate-950 border border-slate-800 rounded-3xl p-6 min-h-[240px] flex flex-col justify-center items-center relative overflow-hidden shadow-2xl">
+                <div id="lab-sim-canvas" class="w-full flex flex-wrap items-center justify-center gap-3 my-6">
+                    <!-- Injected via JS -->
+                </div>
+                <div id="lab-sim-info" class="w-full bg-slate-900/90 border border-slate-800 rounded-2xl p-4 text-xs text-slate-300 leading-relaxed">
+                    Klik salah satu pilihan simulasi di atas untuk memulai eksperimen hantaran impuls.
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SEC 4: DRAG & DROP 1 (ORGAN -> FUNGSI) ================= -->
+        <section id="sec-dnd1" class="view-section hidden space-y-6">
+            <div class="border-b border-slate-800 pb-3 flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <h2 class="text-lg font-extrabold text-cyan-300 flex items-center gap-2">
+                        🖐️ Drag & Drop 1: Pasangkan Organ ke Fungsinya
+                    </h2>
+                    <p class="text-xs text-slate-400">
+                        Jepit jari (Pinch) atau sentuh/geser kartu organ di sebelah kiri ke dalam kotak fungsi yang tepat di sebelah kanan.
+                    </p>
+                </div>
+                <button onclick="initOrToggleCamera()" class="px-3.5 py-1.5 rounded-xl bg-cyan-500 text-slate-950 font-extrabold text-xs shadow-neon-cyan hover:scale-105 transition-all">
+                    📷 Aktifkan Gestur Kamera
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6">
+                <!-- Source Pool Left -->
+                <div class="md:col-span-5 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider flex justify-between">
+                        <span>📦 Kartu Organ (Tarik dari sini):</span>
+                        <span class="text-cyan-400 text-[10px]">Pinch / Drag</span>
+                    </h3>
+                    <div id="pool-dnd1" class="space-y-3 min-h-[300px] p-3 bg-slate-950/60 border border-slate-800 rounded-2xl">
+                        <!-- Cards Injected via JS -->
+                    </div>
+                </div>
+
+                <!-- Drop Targets Right -->
+                <div class="md:col-span-7 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        🎯 Kotak Deskripsi Fungsi (Lepaskan di sini):
+                    </h3>
+                    <div id="targets-dnd1" class="space-y-3 min-h-[300px]">
+                        <!-- Slots Injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SEC 5: DRAG & DROP 2 (KUIS JALUR & RESEPTOR - 3 BABAK) ================= -->
+        <section id="sec-dnd2" class="view-section hidden space-y-6">
+            <div class="border-b border-slate-800 pb-3 flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <h2 class="text-lg font-extrabold text-emerald-400 flex items-center gap-2">
+                        🎯 Drag & Drop 2: Kuis Jalur, Reseptor & Kasus Harian
+                    </h2>
+                    <p class="text-xs text-slate-400">
+                        Pilih babak di bawah ini dan pasangkan setiap konsep dengan sasaran yang sesuai.
+                    </p>
+                </div>
+                <span id="dnd2-round-counter" class="text-xs font-mono font-bold px-3 py-1.5 rounded-full bg-slate-950 border border-slate-800 text-amber-400">
+                    Tersisa: 5 Soal
+                </span>
+            </div>
+
+            <!-- Round Tabs -->
+            <div class="flex flex-wrap gap-2 bg-slate-950 p-2 rounded-2xl border border-slate-800">
+                <button onclick="loadDnd2Round(1)" id="dnd2-tab-1" class="dnd2-round-tab flex-1 min-w-[130px] py-2 px-3 rounded-xl text-xs font-bold text-center transition-all bg-emerald-500 text-slate-950 shadow-neon-green">
+                    Babak 1: Tipe Reseptor
+                </button>
+                <button onclick="loadDnd2Round(2)" id="dnd2-tab-2" class="dnd2-round-tab flex-1 min-w-[130px] py-2 px-3 rounded-xl text-xs font-bold text-center text-slate-400 hover:text-slate-200">
+                    Babak 2: Jalur Impuls
+                </button>
+                <button onclick="loadDnd2Round(3)" id="dnd2-tab-3" class="dnd2-round-tab flex-1 min-w-[130px] py-2 px-3 rounded-xl text-xs font-bold text-center text-slate-400 hover:text-slate-200">
+                    Babak 3: Kasus Harian
+                </button>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-12 gap-6 bg-slate-900/90 border border-slate-800 rounded-3xl p-5 shadow-2xl">
+                <!-- Source Cards Left -->
+                <div class="md:col-span-5 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        📦 Kartu Concept (Pinch / Drag):
+                    </h3>
+                    <div id="pool-dnd2" class="space-y-3 min-h-[300px]">
+                        <!-- Cards Injected via JS -->
+                    </div>
+                </div>
+
+                <!-- Drop Targets Right -->
+                <div class="md:col-span-7 space-y-3">
+                    <h3 class="text-xs font-bold text-slate-400 uppercase tracking-wider">
+                        🎯 Target Pasangan:
+                    </h3>
+                    <div id="targets-dnd2" class="space-y-3 min-h-[300px]">
+                        <!-- Slots Injected via JS -->
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ================= SEC 6: REFLEKSI & BADGE ================= -->
+        <section id="sec-refleksi" class="view-section hidden space-y-8">
+            <div class="border-b border-slate-800 pb-3">
+                <h2 class="text-lg font-extrabold text-cyan-400 flex items-center gap-2">💭 Aktivitas 6: Refleksi & Lencana Penghargaan</h2>
+                <p class="text-xs text-slate-400">Tinjau lencana pencapaian belajar dan isi lembar evaluasi refleksi diri.</p>
+            </div>
+
+            <!-- Badges -->
+            <div class="space-y-3">
+                <h3 class="text-xs font-bold text-slate-300 uppercase tracking-wider">🏆 Lencana Prestasi Kamu:</h3>
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                    <div id="badge-ahli" class="grayscale opacity-40 bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center space-y-2 transition-all">
+                        <span class="text-3xl block">🏆</span>
+                        <h4 class="text-xs font-bold text-amber-400">Master Indra</h4>
+                        <p class="text-[10px] text-slate-400">Skor Total ≥ 1000 Poin</p>
+                    </div>
+
+                    <div id="badge-lab" class="grayscale opacity-40 bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center space-y-2 transition-all">
+                        <span class="text-3xl block">🔬</span>
+                        <h4 class="text-xs font-bold text-emerald-400">Peneliti Indra</h4>
+                        <p class="text-[10px] text-slate-400">Selesaikan Simulasi Lab</p>
+                    </div>
+
+                    <div id="badge-gesture" class="grayscale opacity-40 bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center space-y-2 transition-all">
+                        <span class="text-3xl block">🖐️</span>
+                        <h4 class="text-xs font-bold text-cyan-400">Pakar Gestur</h4>
+                        <p class="text-[10px] text-slate-400">Gunakan Kamera MediaPipe</p>
+                    </div>
+
+                    <div id="badge-kritis" class="grayscale opacity-40 bg-slate-900 border border-slate-800 rounded-2xl p-4 text-center space-y-2 transition-all">
+                        <span class="text-3xl block">🎯</span>
+                        <h4 class="text-xs font-bold text-purple-400">Tuntas Drag & Drop</h4>
+                        <p class="text-[10px] text-slate-400">Selesaikan Seluruh Kuis</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reflection Form -->
+            <div class="bg-slate-900 border border-slate-800 rounded-3xl p-6 space-y-4">
+                <h3 class="text-sm font-bold text-slate-200">Lembar Evaluasi Self-Reflection:</h3>
+                <form id="form-refleksi" onsubmit="submitRefleksiForm(event)" class="space-y-4">
+                    <div class="space-y-1">
+                        <label class="text-xs text-slate-300 block">1. Apakah penggunaan Drag & Drop membantu pemahamanmu tentang alur sistem indra?</label>
+                        <input type="text" id="ref-q1" required class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500" placeholder="Tuliskan pendapatmu...">
+                    </div>
+
+                    <div class="space-y-1">
+                        <label class="text-xs text-slate-300 block">2. Sebutkan 2 perilaku sehat untuk merawat alat indra dalam kehidupan sehari-hari!</label>
+                        <textarea id="ref-q2" required rows="2" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-cyan-500" placeholder="Contoh: Menjaga jarak pandang membaca, tidak memakai earphone dengan volume terlalu keras..."></textarea>
+                    </div>
+
+                    <button type="submit" class="px-6 py-3 rounded-2xl bg-gradient-to-r from-emerald-500 to-cyan-500 text-slate-950 font-extrabold text-xs shadow-neon-green hover:scale-105 transition-all">
+                        Kirim Refleksi & Tampilkan Laporan Evaluasi 📊
+                    </button>
+                </form>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- EVALUATION RESULT POPUP MODAL -->
+    <div id="eval-modal" class="fixed inset-0 bg-black/80 backdrop-blur-md z-50 flex items-center justify-center p-4 hidden">
+        <canvas id="fireworks-canvas" class="absolute inset-0 pointer-events-none z-0"></canvas>
+        <div class="bg-slate-900 border border-cyan-500/50 rounded-3xl p-6 max-w-md w-full text-center space-y-5 shadow-2xl relative z-10">
+            <div class="w-16 h-16 bg-cyan-500/10 rounded-2xl border border-cyan-500/30 flex items-center justify-center text-3xl mx-auto text-cyan-400 shadow-neon-cyan">
+                🎓
+            </div>
+            <div>
+                <h3 class="text-xl font-extrabold text-slate-100">Laporan Hasil Laboratorium</h3>
+                <p class="text-xs text-slate-400 mt-0.5">Sistem Indra Manusia - IPA Kelas IX</p>
+            </div>
+
+            <div class="bg-slate-950 border border-slate-800 rounded-2xl p-4 space-y-3">
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-semibold">Total Skor Akhir:</span>
+                    <strong id="modal-score" class="text-amber-400 text-xl font-mono">0</strong>
+                </div>
+                <div class="flex justify-between items-center text-xs">
+                    <span class="text-slate-400 font-semibold">Predikat Ketuntasan:</span>
+                    <span id="modal-predikat" class="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold">Sangat Baik</span>
+                </div>
+                <div id="modal-feedback" class="text-xs text-slate-300 pt-2 border-t border-slate-800 text-left leading-relaxed">
+                    -
+                </div>
+            </div>
+
+            <button onclick="closeModal()" class="w-full py-3 rounded-2xl bg-cyan-500 text-slate-950 font-extrabold text-xs shadow-neon-cyan hover:scale-105 transition-all">
+                Tutup Laporan
+            </button>
+        </div>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="bg-slate-950 border-t border-slate-800 py-4 text-center text-xs text-slate-500">
+        Laboratorium Sains Digital IPA Kelas IX • Didesain Khusus untuk Pembelajaran Mandiri & PID
+    </footer>
+
+    <script>
+        // ==========================================================================
+        // 1. SYNTHETIC WEB AUDIO API (POP, CHIME, BUZZER, FANFARE)
+        // ==========================================================================
+        let audioCtx = null;
+
+        function getAudioContext() {
+            if (!audioCtx) {
+                const AudioContext = window.AudioContext || window.webkitAudioContext;
+                audioCtx = new AudioContext();
+            }
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume();
+            }
+            return audioCtx;
+        }
+
+        function playPopSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(300, now);
+                osc.frequency.exponentialRampToValueAtTime(700, now + 0.06);
+
+                gain.gain.setValueAtTime(0.2, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.06);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.06);
+            } catch (e) {}
+        }
+
+        function playChimeSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+                
+                const osc1 = ctx.createOscillator();
+                const osc2 = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc1.type = 'sine';
+                osc2.type = 'triangle';
+
+                osc1.frequency.setValueAtTime(523.25, now); // C5
+                osc1.frequency.exponentialRampToValueAtTime(880, now + 0.25); // A5
+
+                osc2.frequency.setValueAtTime(659.25, now); // E5
+                osc2.frequency.exponentialRampToValueAtTime(1046.50, now + 0.25); // C6
+
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.35);
+
+                osc1.connect(gain);
+                osc2.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc1.start(now);
+                osc2.start(now);
+                osc1.stop(now + 0.35);
+                osc2.stop(now + 0.35);
+            } catch (e) {}
+        }
+
+        function playBuzzerSound() {
+            try {
+                const ctx = getAudioContext();
+                const now = ctx.currentTime;
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, now);
+                osc.frequency.linearRampToValueAtTime(100, now + 0.25);
+
+                gain.gain.setValueAtTime(0.3, now);
+                gain.gain.exponentialRampToValueAtTime(0.001, now + 0.25);
+
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+
+                osc.start(now);
+                osc.stop(now + 0.25);
+            } catch (e) {}
+        }
+
+        function playFanfareSound() {
+            try {
+                const ctx = getAudioContext();
+                const notes = [523.25, 659.25, 783.99, 1046.50];
+                notes.forEach((freq, i) => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    const now = ctx.currentTime + (i * 0.12);
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, now);
+
+                    gain.gain.setValueAtTime(0.2, now);
+                    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.3);
+
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+
+                    osc.start(now);
+                    osc.stop(now + 0.3);
+                });
+            } catch(e) {}
+        }
+
+        // ==========================================================================
+        // 2. DATA BANKS & APP STATE
+        // ==========================================================================
+        let globalScore = 0;
+        let completedSections = new Set(['sec-menu']);
+
+        // Data Organ Details
+        const organDetails = {
+            mata: { nama: "MATA (Indra Penglihatan)", stimulus: "Gelombang Cahaya (380-750 nm)", reseptor: "Fotoreseptor (Sel Batang & Sel Kerucut Retina)", fungsi: "Memfokuskan pembiasan cahaya oleh kornea & lensa menuju retina.", contoh: "Membedakan spektrum warna dan menyesuaikan pupil saat terang/gelap." },
+            telinga: { nama: "TELINGA (Indra Pendengaran & Keseimbangan)", stimulus: "Getaran Gelombang Suara (20-20.000 Hz)", reseptor: "Fonoreseptor / Mekanoreseptor (Organ Korti Koklea)", fungsi: "Menerima getaran frekuensi nada serta menjaga keseimbangan posisi tubuh.", contoh: "Mendengarkan alunan musik dan membedakan tinggi rendah suara." },
+            hidung: { nama: "HIDUNG (Indra Penciuman / Pembau)", stimulus: "Molekul Senyawa Kimia Gas Terlarut", reseptor: "Kemoreseptor (Epitel Olfaktori Rongga Hidung)", fungsi: "Mendeteksi partikel gas terlarut dalam mukus hidung.", contoh: "Mencium harum parfum, aroma masakan, atau bahaya asap kebocoran gas." },
+            lidah: { nama: "LIDAH (Indra Pengecap)", stimulus: "Zat Kimia Terlarut dalam Air Liur", reseptor: "Kemoreseptor (Tunas Pengecap / Taste Buds Papila)", fungsi: "Merespons 5 rasa dasar: Manis, Asin, Asam, Pahit, dan Umami.", contoh: "Mengecap manisnya madu, asinnya garam, atau gurihnya kuah sup." },
+            kulit: { nama: "KULIT (Indra Peraba / Pangrasa)", stimulus: "Mekanis (Sentuhan, Tekanan), Suhu, & Nyeri", reseptor: "Mekanoreseptor (Meissner, Pacini), Termoreseptor, Nosisseptor", fungsi: "Merespons rangsangan fisik luar langsung pada permukaan kulit.", contoh: "Sensasi dingin es batu, tekstur amplas yang kasar, serta rasa nyeri luka." }
+        };
+
+        const materiList = [
+            { title: "1. Konsep Dasar Organ Indra", text: "Organ indra (eksteroseptor) berfungsi menerima impuls rangsangan dari lingkungan luar tubuh untuk dikirimkan ke sistem saraf pusat." },
+            { title: "2. Klasifikasi Tipe Reseptor", text: "Fotoreseptor (cahaya), Fonoreseptor (bunyi), Kemoreseptor (zat kimia), Mekanoreseptor (tekanan/sentuhan), dan Termoreseptor (suhu)." },
+            { title: "3. Anatomi Penglihatan", text: "Cahaya ➔ Kornea ➔ Pupil ➔ Lensa Mata ➔ Retina (membentuk bayangan nyata, terbalik, diperkecil) ➔ Saraf Optik ➔ Otak." },
+            { title: "4. Anatomi Pendengaran", text: "Getaran ➔ Daun Telinga ➔ Gendang Telinga ➔ 3 Tulang Pendengaran ➔ Koklea (Organ Korti) ➔ Saraf Auditori ➔ Otak." },
+            { title: "5. Anatomi Pembau", text: "Partikel Gas ➔ Rongga Hidung ➔ Larut Mukus ➔ Silia Olfaktori ➔ Saraf Olfaktori ➔ Pusat Pembau Otak." },
+            { title: "6. Anatomi Pengecap", text: "Molekul Terlarut ➔ Tunas Pengecap (Papila) ➔ Merangsang Sel Reseptor Rasa ➔ Saraf Gustatori ➔ Otak." },
+            { title: "7. Reseptor Khusus Kulit", text: "Meissner (sentuhan), Pacini (tekanan), Ruffini (panas), Krause (dingin), dan Ujung Saraf Bebas (nyeri)." },
+            { title: "8. Jalur Hantaran Impuls", text: "Stimulus ➔ Reseptor ➔ Saraf Sensorik (Aferen) ➔ Otak ➔ Saraf Motorik (Eferen) ➔ Efektor (Otot/Kelenjar)." },
+            { title: "9. Peran Serebrum (Otak)", text: "Otak besar menerjemahkan sinyal listrik dari semua reseptor indra menjadi persepsi visual, bunyi, aroma, atau rasa." },
+            { title: "10. Kelainan & Gangguan", text: "Miopi (rabun jauh), Presbiopi, Anosmia (hilang bau), Astigmatisme, Katarak, dan Tuli Konduksi/Sensori." },
+            { title: "11. Higiene & Kesehatan Indra", text: "Membaca di cahaya cukup, membatasi volume earphone <85 dB, dan mengonsumsi makanan bergizi kaya Vitamin A & C." }
+        ];
+
+        // Drag & Drop 1 Data (Organ -> Fungsi)
+        const dnd1Data = {
+            items: [
+                { id: 'card_mata', label: '👁️ MATA', matchId: 'slot_mata' },
+                { id: 'card_telinga', label: '👂 TELINGA', matchId: 'slot_telinga' },
+                { id: 'card_hidung', label: '👃 HIDUNG', matchId: 'slot_hidung' },
+                { id: 'card_lidah', label: '👅 LIDAH', matchId: 'slot_lidah' },
+                { id: 'card_kulit', label: '✋ KULIT', matchId: 'slot_kulit' }
+            ],
+            slots: [
+                { id: 'slot_mata', text: 'Fotoreseptor yang memfokuskan pembiasan cahaya ke sel retina.' },
+                { id: 'slot_telinga', text: 'Fonoreseptor penangkap getaran gelombang suara & pembantu keseimbangan.' },
+                { id: 'slot_hidung', text: 'Kemoreseptor gas pendeteksi aroma terlarut dalam mukus.' },
+                { id: 'slot_lidah', text: 'Kemoreseptor cair pendeteksi 5 rasa dasar pada tunas pengecap papila.' },
+                { id: 'slot_kulit', text: 'Mekanoreseptor & Termoreseptor penerima tekanan, suhu, dan nyeri.' }
+            ]
+        };
+
+        // Drag & Drop 2 Data (3 Rounds)
+        const dnd2Rounds = {
+            1: {
+                title: "Babak 1: Pasangkan Tipe Reseptor Khusus",
+                items: [
+                    { id: 'q2_1', label: '⚡ Fotoreseptor', matchId: 's2_1' },
+                    { id: 'q2_2', label: '🎵 Fonoreseptor', matchId: 's2_2' },
+                    { id: 'q2_3', label: '👃 Kemoreseptor Gas', matchId: 's2_3' },
+                    { id: 'q2_4', label: '🍋 Kemoreseptor Cair', matchId: 's2_4' },
+                    { id: 'q2_5', label: '👉 Mekanoreseptor', matchId: 's2_5' }
+                ],
+                slots: [
+                    { id: 's2_1', text: 'Penerima rangsangan spektrum gelombang cahaya (Retina Mata)' },
+                    { id: 's2_2', text: 'Penerima getaran nada suara (Organ Korti Telinga)' },
+                    { id: 's2_3', text: 'Penerima partikel gas terlarut mukus (Epitel Olfaktori Hidung)' },
+                    { id: 's2_4', text: 'Penerima molekul zat terlarut ludah (Tunas Pengecap Lidah)' },
+                    { id: 's2_5', text: 'Penerima tekanan, sentuhan, dan getaran fisik (Kulit)' }
+                ]
+            },
+            2: {
+                title: "Babak 2: Pasangkan Jalur Hantaran Impuls Pendengaran",
+                items: [
+                    { id: 'q22_1', label: '1️⃣ Wave Suara Udara', matchId: 's22_1' },
+                    { id: 'q22_2', label: '2️⃣ Gendang Telinga', matchId: 's22_2' },
+                    { id: 'q22_3', label: '3️⃣ 3 Tulang Pendengaran', matchId: 's22_3' },
+                    { id: 'q22_4', label: '4️⃣ Organ Korti Koklea', matchId: 's22_4' },
+                    { id: 'q22_5', label: '5️⃣ Saraf Auditori', matchId: 's22_5' }
+                ],
+                slots: [
+                    { id: 's22_1', text: 'Tahap 1: Tangkapan getaran akustik awal oleh daun telinga' },
+                    { id: 's22_2', text: 'Tahap 2: Resonansi getaran membran timpani utama' },
+                    { id: 's22_3', text: 'Tahap 3: Amplifikasi getaran oleh tulang martil, landasan, sanggurdi' },
+                    { id: 's22_4', text: 'Tahap 4: Konversi gerakan cairan sel rambut menjadi sinyal listrik' },
+                    { id: 's22_5', text: 'Tahap 5: Transmisi sinyal saraf menuju pusat pendengaran otak' }
+                ]
+            },
+            3: {
+                title: "Babak 3: Pasangkan Kasus Nyata Harian",
+                items: [
+                    { id: 'q23_1', label: '🔥 Panci Panas', matchId: 's23_1' },
+                    { id: 'q23_2', label: '☕ Keharuman Kopi', matchId: 's23_2' },
+                    { id: 'q23_3', label: '🍋 Keasaman Lemon', matchId: 's23_3' },
+                    { id: 'q23_4', label: '🌈 Warna Pelangi', matchId: 's23_4' },
+                    { id: 'q23_5', label: '⏰ Bunyi Alaram', matchId: 's23_5' }
+                ],
+                slots: [
+                    { id: 's23_1', text: 'Reaksi refleks tarik tangan mendadak oleh Termoreseptor & Nyeri Kulit' },
+                    { id: 's23_2', text: 'Sensasi keharuman oleh Epitel Olfaktori Hidung' },
+                    { id: 's23_3', text: 'Meringis karena stimulasi asam pada Papila Lidah' },
+                    { id: 's23_4', text: 'Persepsi estetika warna oleh Fotoreseptor Kerucut Retina Mata' },
+                    { id: 's23_5', text: 'Terbangun tidur karena impuls nada oleh Koklea Telinga' }
+                ]
+            }
+        };
+
+        // ==========================================================================
+        // 3. MEDIAPIPE HAND TRACKING & CAMERA SYSTEM
+        // ==========================================================================
+        let cameraActive = false;
+        let mediaPipeHands = null;
+        let cameraUtils = null;
+
+        // Virtual Cursor State
+        let cursorX = window.innerWidth / 2;
+        let cursorY = window.innerHeight / 2;
+        let isPinching = false;
+        let lastPinchState = false;
+
+        async function initOrToggleCamera() {
+            playPopSound();
+            const camDock = document.getElementById('camera-dock');
+            const camDot = document.getElementById('cam-dot');
+            const camBtnText = document.getElementById('cam-btn-text');
+
+            if (cameraActive) {
+                toggleCamera(false);
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                alert("Kamera tidak diizinkan atau protocol tidak mendukung webcam. Anda tetap bisa menggunakan Layar Sentuh / Mouse!");
+                return;
+            }
+
+            try {
+                const videoEl = document.getElementById('webcam-input');
+                const canvasEl = document.getElementById('gesture-canvas');
+                const canvasCtx = canvasEl.getContext('2d');
+                const cursorEl = document.getElementById('virtual-cursor');
+
+                if (!mediaPipeHands) {
+                    mediaPipeHands = new Hands({
+                        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/hands/${file}`
+                    });
+
+                    mediaPipeHands.setOptions({
+                        maxNumHands: 1,
+                        modelComplexity: 1,
+                        minDetectionConfidence: 0.6,
+                        minTrackingConfidence: 0.6
+                    });
+
+                    mediaPipeHands.onResults((results) => {
+                        canvasCtx.save();
+                        canvasCtx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+                        canvasCtx.drawImage(results.image, 0, 0, canvasEl.width, canvasEl.height);
+
+                        const statusOverlay = document.getElementById('gesture-status-overlay');
+
+                        if (results.multiHandLandmarks && results.multiHandLandmarks.length > 0) {
+                            const landmarks = results.multiHandLandmarks[0];
+
+                            // Draw Landmarks on preview
+                            for (let lm of landmarks) {
+                                canvasCtx.beginPath();
+                                canvasCtx.arc(lm.x * canvasEl.width, lm.y * canvasEl.height, 2, 0, 2 * Math.PI);
+                                canvasCtx.fillStyle = "#00f2fe";
+                                canvasCtx.fill();
+                            }
+
+                            // Landmark 8 = Index tip, Landmark 4 = Thumb tip
+                            const indexTip = landmarks[8];
+                            const thumbTip = landmarks[4];
+
+                            // Screen position interpolation
+                            const targetX = (1 - indexTip.x) * window.innerWidth;
+                            const targetY = indexTip.y * window.innerHeight;
+
+                            cursorX += (targetX - cursorX) * 0.45;
+                            cursorY += (targetY - cursorY) * 0.45;
+
+                            cursorEl.style.left = `${cursorX}px`;
+                            cursorEl.style.top = `${cursorY}px`;
+                            cursorEl.classList.remove('hidden');
+
+                            // Pinch Distance Calculation
+                            const dist = Math.hypot(indexTip.x - thumbTip.x, indexTip.y - thumbTip.y);
+                            isPinching = dist < 0.085;
+
+                            if (isPinching) {
+                                cursorEl.classList.add('pinched');
+                                document.getElementById('cursor-label').innerText = "PINCH / DRAGGING";
+                                statusOverlay.innerText = "Gesture: PINCH (AMBIL)";
+                                statusOverlay.className = "absolute bottom-0 inset-x-0 bg-emerald-950/90 text-[10px] text-center py-1 text-emerald-300 font-mono font-bold";
+                            } else {
+                                cursorEl.classList.remove('pinched');
+                                document.getElementById('cursor-label').innerText = "POINTER";
+                                statusOverlay.innerText = "Gesture: TELUNJUK";
+                                statusOverlay.className = "absolute bottom-0 inset-x-0 bg-black/80 text-[10px] text-center py-1 text-cyan-300 font-mono";
+                            }
+
+                            // Dispatch Gesture to Collision Engine
+                            handleVirtualPinchInteraction(cursorX, cursorY, isPinching);
+                            unlockBadge('badge-gesture');
+                        } else {
+                            cursorEl.classList.add('hidden');
+                            statusOverlay.innerText = "Mencari Tangan...";
+                            statusOverlay.className = "absolute bottom-0 inset-x-0 bg-black/80 text-[10px] text-center py-1 text-slate-400 font-mono";
+                        }
+                        canvasCtx.restore();
+                    });
+                }
+
+                if (!cameraUtils) {
+                    cameraUtils = new Camera(videoEl, {
+                        onFrame: async () => {
+                            await mediaPipeHands.send({ image: videoEl });
+                        },
+                        width: 320,
+                        height: 240
+                    });
+                }
+
+                await cameraUtils.start();
+                cameraActive = true;
+                camDock.classList.remove('hidden');
+                camDot.className = "w-2 h-2 rounded-full bg-emerald-400 animate-pulse";
+                camBtnText.innerText = "📷 Gestur Kamera On";
+
+            } catch (err) {
+                console.error("Camera error:", err);
+                cameraActive = false;
+                camDot.className = "w-2 h-2 rounded-full bg-red-500";
+                camBtnText.innerText = "📷 Gestur Kamera Off";
+                alert("Gagal mengaktifkan kamera. Anda tetap dapat melakukan Drag & Drop secara penuh menggunakan Touchscreen / Mouse.");
+            }
+        }
+
+        function toggleCamera(show) {
+            const camDock = document.getElementById('camera-dock');
+            if (!show) {
+                if (cameraUtils) cameraUtils.stop();
+                cameraActive = false;
+                camDock.classList.add('hidden');
+                document.getElementById('virtual-cursor').classList.add('hidden');
+                document.getElementById('cam-dot').className = "w-2 h-2 rounded-full bg-red-500";
+                document.getElementById('cam-btn-text').innerText = "📷 Gestur Kamera Off";
+            }
+        }
+
+        // ==========================================================================
+        // 4. UNIFIED DRAG & DROP COLLISION ENGINE (POINTERS BYPASS + BBOX DETECT)
+        // ==========================================================================
+        let draggedCard = null;
+
+        function startDrag(cardEl, x, y) {
+            if (cardEl.classList.contains('matched')) return;
+            draggedCard = cardEl;
+            
+            playPopSound();
+            cardEl.classList.add('is-dragging'); // Adds pointer-events: none dynamically!
+            
+            cardEl.style.left = `${x}px`;
+            cardEl.style.top = `${y}px`;
+        }
+
+        function moveDrag(x, y) {
+            if (!draggedCard) return;
+
+            draggedCard.style.left = `${x}px`;
+            draggedCard.style.top = `${y}px`;
+
+            // Highlight hover slot underneath pointer (Works because draggedCard has pointer-events: none!)
+            document.querySelectorAll('.drop-slot').forEach(slot => slot.classList.remove('slot-hover'));
+            const targetUnderCursor = document.elementFromPoint(x, y);
+            if (targetUnderCursor) {
+                const dropSlot = targetUnderCursor.closest('.drop-slot');
+                if (dropSlot && !dropSlot.classList.contains('correct-slot')) {
+                    dropSlot.classList.add('slot-hover');
+                }
+            }
+        }
+
+        function endDrag(x, y) {
+            if (!draggedCard) return;
+
+            const currentCard = draggedCard;
+            draggedCard = null;
+
+            // Remove drag highlight
+            document.querySelectorAll('.drop-slot').forEach(slot => slot.classList.remove('slot-hover'));
+
+            // Collision check: Find target slot underneath
+            const targetUnderCursor = document.elementFromPoint(x, y);
+            const dropSlot = targetUnderCursor ? targetUnderCursor.closest('.drop-slot') : null;
+
+            currentCard.classList.remove('is-dragging');
+
+            if (dropSlot && !dropSlot.classList.contains('correct-slot')) {
+                verifyDropMatch(currentCard, dropSlot, x, y);
+            } else {
+                resetCardToPool(currentCard);
+            }
+        }
+
+        function resetCardToPool(cardEl) {
+            cardEl.style.position = 'relative';
+            cardEl.style.left = 'auto';
+            cardEl.style.top = 'auto';
+            cardEl.style.transform = 'none';
+        }
+
+        function verifyDropMatch(cardEl, slotEl, eventX, eventY) {
+            const cardMatchId = cardEl.getAttribute('data-match');
+            const slotId = slotEl.getAttribute('data-slot-id');
+
+            if (cardMatchId === slotId) {
+                // SUCCESS MATCH!
+                playChimeSound();
+                updateScore(100);
+                showFloatingToast("+100 POIN!", eventX, eventY, "text-emerald-400");
+
+                cardEl.classList.add('matched');
+                cardEl.classList.remove('hover:border-cyan-400');
+                cardEl.style.position = 'relative';
+                cardEl.style.left = 'auto';
+                cardEl.style.top = 'auto';
+                cardEl.style.transform = 'none';
+
+                slotEl.classList.add('correct-slot');
+                slotEl.appendChild(cardEl);
+
+                // Check section completion
+                checkSectionCompletion(slotEl.closest('section'));
+
+            } else {
+                // MISMATCH ERROR!
+                playBuzzerSound();
+                updateScore(-20);
+                showFloatingToast("-20 POIN", eventX, eventY, "text-red-400");
+
+                slotEl.classList.add('shake-anim');
+                setTimeout(() => slotEl.classList.remove('shake-anim'), 450);
+
+                resetCardToPool(cardEl);
+            }
+        }
+
+        // Virtual Pinch Handler for Camera MediaPipe
+        function handleVirtualPinchInteraction(x, y, pinching) {
+            if (pinching && !lastPinchState) {
+                // Pinch Started -> GRAB
+                const elUnderCursor = document.elementFromPoint(x, y);
+                if (elUnderCursor) {
+                    const card = elUnderCursor.closest('.drag-card');
+                    if (card) startDrag(card, x, y);
+                }
+            } else if (pinching && lastPinchState) {
+                // Pinch Held -> MOVE
+                moveDrag(x, y);
+            } else if (!pinching && lastPinchState) {
+                // Pinch Released -> DROP
+                endDrag(x, y);
+            }
+            lastPinchState = pinching;
+        }
+
+        // Touch & Mouse Listeners
+        function attachCardPointerEvents(cardEl) {
+            cardEl.addEventListener('pointerdown', (e) => {
+                if (cardEl.classList.contains('matched')) return;
+                cardEl.setPointerCapture(e.pointerId);
+                startDrag(cardEl, e.clientX, e.clientY);
+            });
+
+            cardEl.addEventListener('pointermove', (e) => {
+                if (draggedCard === cardEl) {
+                    moveDrag(e.clientX, e.clientY);
+                }
+            });
+
+            cardEl.addEventListener('pointerup', (e) => {
+                if (draggedCard === cardEl) {
+                    endDrag(e.clientX, e.clientY);
+                }
+            });
+
+            cardEl.addEventListener('pointercancel', (e) => {
+                if (draggedCard === cardEl) {
+                    endDrag(e.clientX, e.clientY);
+                }
+            });
+        }
+
+        function showFloatingToast(text, x, y, colorClass) {
+            const toast = document.createElement('div');
+            toast.className = `floating-toast ${colorClass} text-sm drop-shadow-md`;
+            toast.innerText = text;
+            toast.style.left = `${x}px`;
+            toast.style.top = `${y}px`;
+            document.body.appendChild(toast);
+            setTimeout(() => toast.remove(), 800);
+        }
+
+        // ==========================================================================
+        // 5. RENDER & LOGIC DRAG & DROP SECTIONS
+        // ==========================================================================
+        function initDnd1() {
+            const pool = document.getElementById('pool-dnd1');
+            const targets = document.getElementById('targets-dnd1');
+
+            // Shuffle Cards
+            const items = [...dnd1Data.items].sort(() => Math.random() - 0.5);
+
+            pool.innerHTML = items.map(item => `
+                <div id="${item.id}" data-match="${item.matchId}" class="drag-card bg-slate-900 border-2 border-slate-800 hover:border-cyan-400 p-4 rounded-2xl text-xs font-bold text-slate-100 flex items-center justify-between shadow-md">
+                    <span>${item.label}</span>
+                    <span class="text-[10px] text-cyan-400 font-mono">🖐️ Pinch / Drag</span>
+                </div>
+            `).join('');
+
+            targets.innerHTML = dnd1Data.slots.map(slot => `
+                <div data-slot-id="${slot.id}" class="drop-slot bg-slate-950/80 border-2 border-dashed border-slate-800 p-4 rounded-2xl text-xs font-semibold text-slate-300 flex items-center justify-between min-h-[64px]">
+                    <span>🎯 ${slot.text}</span>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('#sec-dnd1 .drag-card').forEach(card => attachCardPointerEvents(card));
+        }
+
+        let currentDnd2Round = 1;
+
+        function loadDnd2Round(roundNum) {
+            playPopSound();
+            currentDnd2Round = roundNum;
+
+            document.querySelectorAll('.dnd2-round-tab').forEach(tab => {
+                tab.classList.remove('bg-emerald-500', 'text-slate-950', 'shadow-neon-green');
+                tab.classList.add('text-slate-400');
+            });
+            const activeTab = document.getElementById(`dnd2-tab-${roundNum}`);
+            if (activeTab) {
+                activeTab.classList.add('bg-emerald-500', 'text-slate-950', 'shadow-neon-green');
+                activeTab.classList.remove('text-slate-400');
+            }
+
+            const data = dnd2Rounds[roundNum];
+            const pool = document.getElementById('pool-dnd2');
+            const targets = document.getElementById('targets-dnd2');
+
+            document.getElementById('dnd2-round-counter').innerText = `Tersisa: ${data.items.length} Soal`;
+
+            const items = [...data.items].sort(() => Math.random() - 0.5);
+
+            pool.innerHTML = items.map(item => `
+                <div id="${item.id}" data-match="${item.matchId}" class="drag-card bg-slate-950 border-2 border-slate-800 hover:border-emerald-400 p-4 rounded-2xl text-xs font-bold text-slate-100 flex items-center justify-between shadow-md">
+                    <span>${item.label}</span>
+                    <span class="text-[10px] text-emerald-400 font-mono">🖐️ Pinch / Drag</span>
+                </div>
+            `).join('');
+
+            targets.innerHTML = data.slots.map(slot => `
+                <div data-slot-id="${slot.id}" class="drop-slot bg-slate-950/80 border-2 border-dashed border-slate-800 p-4 rounded-2xl text-xs font-semibold text-slate-300 flex items-center justify-between min-h-[64px]">
+                    <span>🎯 ${slot.text}</span>
+                </div>
+            `).join('');
+
+            document.querySelectorAll('#sec-dnd2 .drag-card').forEach(card => attachCardPointerEvents(card));
+        }
+
+        function checkSectionCompletion(secEl) {
+            if (!secEl) return;
+
+            const remainingCards = secEl.querySelectorAll('.drag-card:not(.matched)');
+            if (secEl.id === 'sec-dnd2') {
+                document.getElementById('dnd2-round-counter').innerText = `Tersisa: ${remainingCards.length} Soal`;
+            }
+
+            if (remainingCards.length === 0) {
+                playFanfareSound();
+                unlockBadge('badge-kritis');
+            }
+        }
+
+        // ==========================================================================
+        // 6. UI NAVIGATION & PROGRESS LOGIC
+        // ==========================================================================
+        function switchSection(secId) {
+            playPopSound();
+            document.querySelectorAll('.view-section').forEach(sec => sec.classList.add('hidden'));
+            document.querySelectorAll('.nav-tab-btn').forEach(btn => {
+                btn.classList.remove('bg-cyan-500', 'text-slate-950', 'shadow-neon-cyan');
+                btn.classList.add('text-slate-400');
+            });
+
+            const activeSec = document.getElementById(secId);
+            if (activeSec) activeSec.classList.remove('hidden');
+
+            const activeBtn = document.querySelector(`[data-target="${secId}"]`);
+            if (activeBtn) {
+                activeBtn.classList.add('bg-cyan-500', 'text-slate-950', 'shadow-neon-cyan');
+                activeBtn.classList.remove('text-slate-400');
+            }
+
+            completedSections.add(secId);
+            updateProgress();
+        }
+
+        function updateScore(delta) {
+            globalScore = Math.max(0, globalScore + delta);
+            document.getElementById('score-display').innerText = globalScore;
+            if (globalScore >= 1000) unlockBadge('badge-ahli');
+        }
+
+        function updateProgress() {
+            const totalSecs = 7;
+            const pct = Math.round((completedSections.size / totalSecs) * 100);
+            document.getElementById('progress-bar-fill').style.width = `${pct}%`;
+            document.getElementById('progress-text').innerText = `${pct}%`;
+        }
+
+        function unlockBadge(badgeId) {
+            const el = document.getElementById(badgeId);
+            if (el) {
+                el.classList.remove('grayscale', 'opacity-40');
+                el.classList.add('shadow-neon-cyan', 'border-cyan-500/50');
+            }
+        }
+
+        function showOrganDetail(key) {
+            playPopSound();
+            const data = organDetails[key];
+            const container = document.getElementById('organ-detail-display');
+
+            container.innerHTML = `
+                <div class="w-full space-y-4 animate-fade-in">
+                    <div class="flex items-center justify-between border-b border-slate-800 pb-3 flex-wrap gap-2">
+                        <h3 class="text-base font-bold text-cyan-400">${data.nama}</h3>
+                        <span class="px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/30 text-cyan-300 text-xs font-mono">${data.reseptor}</span>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                        <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                            <span class="text-slate-400 font-bold block">⚡ Bentuk Stimulus Rangsangan:</span>
+                            <p class="text-slate-200">${data.stimulus}</p>
+                        </div>
+                        <div class="bg-slate-950 p-4 rounded-2xl border border-slate-800 space-y-1">
+                            <span class="text-slate-400 font-bold block">🎯 Fungsi Utama Organ:</span>
+                            <p class="text-slate-200">${data.fungsi}</p>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-950/80 p-4 rounded-2xl border border-slate-800 text-xs space-y-1">
+                        <span class="text-amber-400 font-bold block">💡 Contoh Nyata Kehidupan:</span>
+                        <p class="text-slate-300">${data.contoh}</p>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderMateriGrid() {
+            const container = document.getElementById('materi-grid-container');
+            container.innerHTML = materiList.map(m => `
+                <div class="bg-slate-900 border border-slate-800 hover:border-cyan-500/40 rounded-2xl p-5 space-y-2 transition-all hover:-translate-y-1">
+                    <h3 class="text-xs font-bold text-cyan-400 font-heading">${m.title}</h3>
+                    <p class="text-xs text-slate-300 leading-relaxed">${m.text}</p>
+                </div>
+            `).join('');
+        }
+
+        function loadLabSim(type) {
+            playPopSound();
+            unlockBadge('badge-lab');
+            const canvas = document.getElementById('lab-sim-canvas');
+            const info = document.getElementById('lab-sim-info');
+
+            if (type === 'mata') {
+                canvas.innerHTML = `
+                    <div class="bg-slate-900 border border-cyan-500/40 px-3 py-2 rounded-xl text-center text-xs font-bold text-cyan-300 shadow-neon-cyan">Sinar Gelombang Cahaya</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-slate-700 px-3 py-2 rounded-xl text-center text-xs font-bold text-slate-200">Kornea & Pembiasan Lensa</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-emerald-500/40 px-3 py-2 rounded-xl text-center text-xs font-bold text-emerald-300">Retina (Batang & Kerucut)</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-slate-700 px-3 py-2 rounded-xl text-center text-xs font-bold text-slate-200">Impuls Saraf Optik</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-purple-500/40 px-3 py-2 rounded-xl text-center text-xs font-bold text-purple-300">Otak (Pusat Penglihatan)</div>
+                `;
+                info.innerText = "Simulasi Mata: Gelombang cahaya dibiaskan kornea dan lensa menuju fotoreseptor retina, lalu dikonversi menjadi sinyal listrik saraf optik menuju otak.";
+            } else if (type === 'telinga') {
+                canvas.innerHTML = `
+                    <div class="bg-slate-900 border border-cyan-500/40 px-3 py-2 rounded-xl text-center text-xs font-bold text-cyan-300 shadow-neon-cyan">Getaran Suara Udara</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-slate-700 px-3 py-2 rounded-xl text-center text-xs font-bold text-slate-200">Gendang Telinga</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-slate-700 px-3 py-2 rounded-xl text-center text-xs font-bold text-slate-200">3 Tulang Pendengaran</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-emerald-500/40 px-3 py-2 rounded-xl text-center text-xs font-bold text-emerald-300">Koklea (Organ Korti)</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-purple-500/40 px-3 py-2 rounded-xl text-center text-xs font-bold text-purple-300">Otak (Pusat Pendengaran)</div>
+                `;
+                info.innerText = "Simulasi Telinga: Getaran suara menggetarkan membran timpani dan 3 tulang pendengaran, merangsang rambut halus koklea mengirim sinyal nada ke otak.";
+            } else {
+                canvas.innerHTML = `
+                    <div class="bg-slate-900 border border-cyan-500/40 px-3 py-2 rounded-xl text-center text-xs font-bold text-cyan-300 shadow-neon-cyan">Molekul Aroma Gas</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-slate-700 px-3 py-2 rounded-xl text-center text-xs font-bold text-slate-200">Rongga Hidung / Mukus</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-emerald-500/40 px-3 py-2 rounded-xl text-center text-xs font-bold text-emerald-300">Silia Epitel Olfaktori</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-slate-700 px-3 py-2 rounded-xl text-center text-xs font-bold text-slate-200">Saraf Olfaktori</div>
+                    <span class="text-amber-400 text-xs">➔</span>
+                    <div class="bg-slate-900 border border-purple-500/40 px-3 py-2 rounded-xl text-center text-xs font-bold text-purple-300">Otak (Pusat Pembau)</div>
+                `;
+                info.innerText = "Simulasi Hidung: Partikel gas terlarut dalam mukus hidung mengikat reseptor silia olfaktori untuk ditransmisikan sebagai sinyal aroma ke otak.";
+            }
+        }
+
+        // ==========================================================================
+        // 7. TEXT TO SPEECH & EVALUATION MODAL
+        // ==========================================================================
+        function speakText(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const u = new SpeechSynthesisUtterance(text);
+                u.lang = 'id-ID';
+                u.rate = 0.95;
+                window.speechSynthesis.speak(u);
+            }
+        }
+
+        function speakInstruction() {
+            speakText("Selamat datang di Laboratorium Digital Sistem Indra Manusia. Gunakan gestur jepit tangan atau layar sentuh untuk memasangkan kartu ke kotaknya.");
+        }
+
+        function speakMateriAll() {
+            const text = materiList.map(m => m.title + ". " + m.text).join(" ");
+            speakText(text);
+        }
+
+        function submitRefleksiForm(e) {
+            e.preventDefault();
+            playChimeSound();
+
+            document.getElementById('modal-score').innerText = globalScore;
+            const pred = document.getElementById('modal-predikat');
+            const fb = document.getElementById('modal-feedback');
+
+            if (globalScore >= 1000) {
+                pred.innerText = "Sangat Baik (Ahli)";
+                pred.className = "px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 font-bold";
+                fb.innerText = "Luar biasa! Pemahamanmu terhadap anatomi panca indra, tipe reseptor, dan hantaran impuls telah tuntas secara sempurna.";
+            } else if (globalScore >= 600) {
+                pred.innerText = "Baik";
+                pred.className = "px-3 py-1 rounded-full bg-cyan-500/20 text-cyan-300 font-bold";
+                fb.innerText = "Bagus sekali! Kamu menguasai sebagian besar materi indra. Tingkatkan kembali pemahaman pada babak studi kasus.";
+            } else {
+                pred.innerText = "Cukup / Perlu Ulang";
+                pred.className = "px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 font-bold";
+                fb.innerText = "Tetap semangat! Pelajari kembali modul materi dan ulangi aktivitas Drag & Drop.";
+            }
+
+            document.getElementById('eval-modal').classList.remove('hidden');
+            triggerCanvasFireworks();
+        }
+
+        function closeModal() {
+            playPopSound();
+            document.getElementById('eval-modal').classList.add('hidden');
+        }
+
+        // Fireworks Confetti Animation
+        function triggerCanvasFireworks() {
+            const canvas = document.getElementById('fireworks-canvas');
+            const ctx = canvas.getContext('2d');
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+
+            const particles = [];
+            for (let i = 0; i < 90; i++) {
+                particles.push({
+                    x: canvas.width / 2,
+                    y: canvas.height / 2,
+                    vx: (Math.random() - 0.5) * 14,
+                    vy: (Math.random() - 0.5) * 14,
+                    color: `hsl(${Math.random() * 360}, 100%, 60%)`,
+                    radius: Math.random() * 4 + 2,
+                    alpha: 1
+                });
+            }
+
+            function animate() {
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                particles.forEach((p, index) => {
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.alpha -= 0.015;
+
+                    ctx.save();
+                    ctx.globalAlpha = p.alpha;
+                    ctx.beginPath();
+                    ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+                    ctx.fillStyle = p.color;
+                    ctx.fill();
+                    ctx.restore();
+
+                    if (p.alpha <= 0) particles.splice(index, 1);
+                });
+
+                if (particles.length > 0) requestAnimationFrame(animate);
+            }
+            animate();
+        }
+
+        // INITIALIZATION ON LOAD
+        document.addEventListener('DOMContentLoaded', () => {
+            renderMateriGrid();
+            showOrganDetail('mata');
+            loadLabSim('mata');
+            initDnd1();
+            loadDnd2Round(1);
+        });
+    </script>
+</body>
+</html>
